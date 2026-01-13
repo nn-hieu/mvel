@@ -1,0 +1,11 @@
+{
+  "Index": "Long",
+  "Organization Id": "String",
+  "Name": "String",
+  "Website": "String",
+  "Country": "String",
+  "Description": "String",
+  "Founded": "Long",
+  "Industry": "String",
+  "Number of employees": "Long"
+}
