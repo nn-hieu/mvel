@@ -2,6 +2,7 @@ package com.hieunn.mvel.services.impls;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hieunn.mvel.mvel.LazyCsvContext;
 import com.hieunn.mvel.services.CsvService;
 import com.hieunn.mvel.utils.CsvUtils;
 import com.hieunn.mvel.utils.DataTypeUtils;
@@ -12,15 +13,20 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 import org.mvel2.MVEL;
+import org.mvel2.ParserContext;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -32,10 +38,11 @@ public class CsvServiceImpl implements CsvService {
 
     @Override
     public byte[] filterCsv(MultipartFile file, MultipartFile dataType, String mvelExpression, String delimiter) throws IOException {
-        Map<String, String> columnDataType = new HashMap<>();
+        Map<String, String> rawColumnToType = new HashMap<>();
         if (dataType != null && !dataType.isEmpty()) {
             try {
-                columnDataType = objectMapper.readValue(dataType.getInputStream(), new TypeReference<>() {});
+                rawColumnToType = objectMapper.readValue(dataType.getInputStream(), new TypeReference<>() {
+                });
             } catch (Exception e) {
                 log.error("Invalid json file, using auto-parse", e);
             }
@@ -52,10 +59,10 @@ public class CsvServiceImpl implements CsvService {
                 .get();
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        InputStream inputStream = file.getInputStream();
-
+        AtomicBoolean isFilteringFinished = new AtomicBoolean(false);
+        Queue<CSVRecord> queue = new ConcurrentLinkedQueue<>();
         try (
-                Reader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
+                Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8);
                 CSVParser parser = readFormat.parse(reader);
                 Writer writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
                 CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT)
@@ -65,41 +72,52 @@ public class CsvServiceImpl implements CsvService {
             List<String> originalHeaders = parser.getHeaderNames();
             printer.printRecord(originalHeaders);
 
-            Map<String, String> headerMapping = new LinkedHashMap<>();
-            for (String h : originalHeaders) {
-                headerMapping.put(h, csvUtils.normalizeHeader(h));
+            Map<String, Integer> headerIndexMap = new HashMap<>();
+            Map<String, String> normalizedColumnToType = new HashMap<>();
+
+            for (int i = 0; i < originalHeaders.size(); i++) {
+                String originalHeader = originalHeaders.get(i);
+                String normalizedHeader = csvUtils.normalizeHeader(originalHeader);
+                headerIndexMap.put(normalizedHeader, i);
+
+                if (rawColumnToType.containsKey(originalHeader)) {
+                    normalizedColumnToType.put(normalizedHeader, rawColumnToType.get(originalHeader));
+                }
             }
 
-            Map<String, Object> context = new HashMap<>();
-
-            for (CSVRecord record : parser) {
-                context.clear();
-
-                for (Map.Entry<String, String> entry : headerMapping.entrySet()) {
-                    String originalHeader = entry.getKey();
-                    String normalizedHeader = entry.getValue();
-                    String rawValue = record.get(originalHeader);
-
-                    Object parsedValue;
-                    if (columnDataType.containsKey(originalHeader)) {
-                        String type = columnDataType.get(originalHeader);
-                        parsedValue = dataTypeUtils.parseValueByType(rawValue, type);
-                    } else {
-                        parsedValue = dataTypeUtils.autoParse(rawValue);
-                    }
-
-                    context.put(normalizedHeader, parsedValue);
-                }
-
+            CompletableFuture<Void> writeCsvTask = CompletableFuture.runAsync(() -> {
                 try {
-                    Object matched = MVEL.executeExpression(compiledExpression, context);
-                    if (matched instanceof Boolean && (Boolean) matched) {
-                        printer.printRecord(record);
+                    while (!isFilteringFinished.get() || !queue.isEmpty()) {
+                        CSVRecord record = queue.poll();
+                        if (record != null) {
+                            printer.printRecord(record);
+                        } else {
+                            Thread.onSpinWait();
+                        }
                     }
-                } catch (Exception e) {
-                    log.warn("Error when processing row {}: {}", record.getRecordNumber(), e.getMessage());
+                } catch (IOException e) {
+                    log.error("Error while writing CSV file", e);
+                    throw new RuntimeException(e);
                 }
-            }
+            });
+
+            StreamSupport.stream(parser.spliterator(), true)
+                    .forEach(record -> {
+                        Map<String, Object> context = new LazyCsvContext(
+                                record,
+                                headerIndexMap,
+                                normalizedColumnToType,
+                                dataTypeUtils
+                        );
+
+                        Object matched = MVEL.executeExpression(compiledExpression, context);
+                        if (matched instanceof Boolean && (Boolean) matched) {
+                            queue.add(record);
+                        }
+                    });
+            isFilteringFinished.set(true);
+
+            writeCsvTask.join();
 
             printer.flush();
         }
