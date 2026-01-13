@@ -57,4 +57,10 @@ public class LoggingFilter extends OncePerRequestFilter implements Ordered {
                 timestamp
         );
     }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.contains("swagger-ui") || uri.contains("v3/api-docs");
+    }
 }
