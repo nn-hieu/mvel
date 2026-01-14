@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+
 @Slf4j
 @RestController
 @RequestMapping("/csv")
@@ -70,26 +72,21 @@ public class CsvController {
                     )
             )
             CsvFilterDto csvFilterDto
-    ) {
-        try {
-            byte[] filteredData = csvService.filterCsv(
-                    csvFile,
-                    dataType,
-                    csvFilterDto.getExpression(),
-                    csvFilterDto.getDelimiter()
-            );
+    ) throws IOException {
+        byte[] filteredData = csvService.filterCsv(
+                csvFile,
+                dataType,
+                csvFilterDto.getExpression(),
+                csvFilterDto.getDelimiter()
+        );
 
-            ByteArrayResource resource = new ByteArrayResource(filteredData);
+        ByteArrayResource resource = new ByteArrayResource(filteredData);
 
-            String outputFileName = "filtered_" + csvFile.getOriginalFilename();
+        String outputFileName = "filtered_" + csvFile.getOriginalFilename();
 
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + outputFileName + "\"")
-                    .contentType(MediaType.parseMediaType("text/csv"))
-                    .body(resource);
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            return ResponseEntity.internalServerError().build();
-        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + outputFileName + "\"")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(resource);
     }
 }

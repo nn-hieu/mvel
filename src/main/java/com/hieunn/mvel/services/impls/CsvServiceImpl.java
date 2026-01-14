@@ -75,7 +75,7 @@ public class CsvServiceImpl implements CsvService {
             Map<String, Integer> headerIndexMap = new HashMap<>();
             Map<String, String> normalizedColumnToType = new HashMap<>();
 
-            for (int i = 0; i < originalHeaders.size(); i++) {
+            for (int i = 0; i < originalHeaders.size(); ++i) {
                 String originalHeader = originalHeaders.get(i);
                 String normalizedHeader = csvUtils.normalizeHeader(originalHeader);
                 headerIndexMap.put(normalizedHeader, i);
