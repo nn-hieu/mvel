@@ -20,6 +20,12 @@ https://github.com/nn-hieu/mvel/releases/download/sample-data/sample-data-large-
 A helper script is provided to automatically download and extract the large dataset.
 
 Please run the following scripts in the right order (from the **root folder** of the project `mvel`):
+> ⚠️ **Note**
+> - If you click **Run** directly from the README UI, first execute:
+```bash 
+cd ../
+```
+> - If you are already in the project root folder (`mvel`), **skip this step** and run only the commands below.
 ```bash
 chmod +x scripts/download-sample-data-large-size.sh
 ```
@@ -33,5 +39,4 @@ The script will:
 
 ## 📌 Notes
 - The large dataset may require more memory and processing time.
-- Use it only for performance testing or benchmarking.
 - Make sure you have `curl` or `wget` installed before running the script.

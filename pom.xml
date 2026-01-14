@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.hieunn</groupId>
     <artifactId>mvel</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>mvel</name>
     <description>mvel</description>
     <url/>
