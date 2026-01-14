@@ -160,7 +160,7 @@ For detailed information about the sample data format and usage, please refer to
 ## 🧪 Quick Test with Swagger
 
 1. Open Swagger UI: `http://localhost:8080/swagger-ui/index.html`  
-   ![img_1.png](docs/images/swagger_step_1.png)
+   ![img.png](docs/images/swagger_step_1.png)
 2. Select the CSV filter endpoint and click `Try it out`  
    ![img_2.png](docs/images/swagger_step_2.png)
 3. Upload a CSV file (in this case I'm using my sample data)
@@ -169,18 +169,18 @@ For detailed information about the sample data format and usage, please refer to
 
    ![img_5.png](docs/images/swagger_step_3.png)
 4. Upload a data type JSON file (optional)  
-   ![img_6.png](docs/images/swagger_step_4.png)
+   ![img.png](docs/images/swagger_step_4.png)
    > 📌 **Note**  
    > If no data type JSON file is provided, the service will automatically detect column data types and cast values at runtime.
 5. Provide an MVEL filter expression (e.g.):
-   ![img_7.png](docs/images/swagger_step_5.png)
+   ![img.png](docs/images/swagger_step_5.png)
    ```text
     (Number_of_employees >= 8000 || Number_of_employees <= 2000) && (Country == 'South Africa' || Country == 'Congo')
     ```
    > 📌 **Note**  
    > - Column names containing spaces or special characters are automatically normalized by replacing them with underscores (`_`).
    > - For example: `"Number of employees"` → `Number_of_employees`
-6. Execute the request and download the filtered result (click the link [Download file]())
+6. Execute the request and download the filtered result (click the link [Download file](README.md))
 ![img.png](docs/images/swagger_step_6.png)
 
 ---
