@@ -180,7 +180,8 @@ For detailed information about the sample data format and usage, please refer to
    > 📌 **Note**  
    > - Column names containing spaces or special characters are automatically normalized by replacing them with underscores (`_`).
    > - For example: `"Number of employees"` → `Number_of_employees`
-6. Execute the request and download the filtered result (click the link [Download file](README.md))
+6. By default, the CSV delimiter is a comma (,). If your CSV file uses a different delimiter (e.g. ;), please update the delimiter accordingly.
+7. Execute the request and download the filtered result (click the link [Download file](README.md))
 ![img.png](docs/images/swagger_step_6.png)
 
 ---
