@@ -13,7 +13,6 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.commons.csv.CSVRecord;
 import org.mvel2.MVEL;
-import org.mvel2.ParserContext;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,11 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -37,12 +31,20 @@ public class CsvServiceImpl implements CsvService {
     private final ObjectMapper objectMapper;
 
     @Override
-    public byte[] filterCsv(MultipartFile file, MultipartFile dataType, String mvelExpression, String delimiter) throws IOException {
+    public byte[] filterCsv(
+            MultipartFile file,
+            MultipartFile dataType,
+            String mvelExpression,
+            String delimiter
+    ) throws IOException {
         Map<String, String> rawColumnToType = new HashMap<>();
         if (dataType != null && !dataType.isEmpty()) {
             try {
-                rawColumnToType = objectMapper.readValue(dataType.getInputStream(), new TypeReference<>() {
-                });
+                rawColumnToType = objectMapper.readValue(
+                        dataType.getInputStream(),
+                        new TypeReference<>() {
+                        }
+                );
             } catch (Exception e) {
                 log.error("Invalid json file, using auto-parse", e);
             }
@@ -58,9 +60,7 @@ public class CsvServiceImpl implements CsvService {
                 .setAllowMissingColumnNames(false)
                 .get();
 
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        AtomicBoolean isFilteringFinished = new AtomicBoolean(false);
-        Queue<CSVRecord> queue = new ConcurrentLinkedQueue<>();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(64 * 1024);
         try (
                 Reader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8);
                 CSVParser parser = readFormat.parse(reader);
@@ -85,39 +85,19 @@ public class CsvServiceImpl implements CsvService {
                 }
             }
 
-            CompletableFuture<Void> writeCsvTask = CompletableFuture.runAsync(() -> {
-                try {
-                    while (!isFilteringFinished.get() || !queue.isEmpty()) {
-                        CSVRecord record = queue.poll();
-                        if (record != null) {
-                            printer.printRecord(record);
-                        } else {
-                            Thread.onSpinWait();
-                        }
-                    }
-                } catch (IOException e) {
-                    log.error("Error while writing CSV file", e);
-                    throw new RuntimeException(e);
+            LazyCsvContext context = new LazyCsvContext(
+                    headerIndexMap,
+                    normalizedColumnToType,
+                    dataTypeUtils
+            );
+            for (CSVRecord record : parser) {
+                context.setRecord(record);
+
+                Object matched = MVEL.executeExpression(compiledExpression, context);
+                if (matched instanceof Boolean && (Boolean) matched) {
+                    printer.printRecord(record);
                 }
-            });
-
-            StreamSupport.stream(parser.spliterator(), true)
-                    .forEach(record -> {
-                        Map<String, Object> context = new LazyCsvContext(
-                                record,
-                                headerIndexMap,
-                                normalizedColumnToType,
-                                dataTypeUtils
-                        );
-
-                        Object matched = MVEL.executeExpression(compiledExpression, context);
-                        if (matched instanceof Boolean && (Boolean) matched) {
-                            queue.add(record);
-                        }
-                    });
-            isFilteringFinished.set(true);
-
-            writeCsvTask.join();
+            }
 
             printer.flush();
         }
